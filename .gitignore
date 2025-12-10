@@ -1,0 +1,31 @@
+# 编译生成的文件
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 测试二进制文件
+*.test
+
+# 输出目录
+/dist/
+/conf/
+
+# Go 模块文件（但保留 go.mod 和 go.sum）
+/go.sum
+
+# 依赖包
+/vendor/
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
