@@ -1,0 +1,13 @@
+# 服务器配置
+server:
+  port: 8080
+
+# 应用配置
+app:
+  count: 1045  # 应用计数器
+
+# Redis配置
+redis:
+  address: "127.0.0.1:6379"
+  password: "123456"
+  db: 0

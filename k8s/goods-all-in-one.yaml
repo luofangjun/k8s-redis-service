@@ -1,0 +1,65 @@
+# 商品服务配置文件
+# 包含商品服务的部署和服务配置
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goods-deployment
+  labels:
+    app: goods-service
+  annotations:
+    description: "商品服务部署配置"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goods-service
+  template:
+    metadata:
+      labels:
+        app: goods-service
+    spec:
+      containers:
+        - name: goods-container
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goods-service
+  labels:
+    app: goods-service
+  annotations:
+    description: "商品服务配置"
+spec:
+  selector:
+    app: goods-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
