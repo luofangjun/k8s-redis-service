@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"k8s-redis-service/logger"
 	"os"
 	"strings"
 
@@ -67,7 +67,8 @@ func LoadConfig() {
 
 	// 读取配置文件
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("读取配置文件失败: %v", err)
+		logger.Error("读取配置文件失败", "error", err)
+		panic("读取配置文件失败: " + err.Error())
 	}
 
 	// 处理环境变量占位符
@@ -76,25 +77,26 @@ func LoadConfig() {
 	// 解析配置到结构体
 	GlobalConfig = &Config{}
 	if err := viper.Unmarshal(GlobalConfig); err != nil {
-		log.Fatalf("解析配置文件失败: %v", err)
+		logger.Error("解析配置文件失败", "error", err)
+		panic("解析配置文件失败: " + err.Error())
 	}
 
 	// 启用配置文件监听
 	viper.WatchConfig()
 	viper.OnConfigChange(func(e fsnotify.Event) {
-		log.Println("配置文件发生变化，重新加载配置...")
+		logger.Info("配置文件发生变化，重新加载配置...")
 
 		newConfig := &Config{}
 		if err := viper.Unmarshal(newConfig); err != nil {
-			log.Printf("重新加载配置失败: %v", err)
+			logger.Error("重新加载配置失败", "error", err)
 			return
 		}
 		GlobalConfig = newConfig
-		log.Println("配置重新加载成功")
-		log.Printf("应用计数器: %d", GlobalConfig.App.Count)
+		logger.Info("配置重新加载成功")
+		logger.Info("应用计数器", "count", GlobalConfig.App.Count)
 	})
 
-	log.Println("配置加载成功")
-	log.Printf("应用计数器: %d", GlobalConfig.App.Count)
-	log.Printf("Redis地址: %s", GlobalConfig.Redis.Address)
+	logger.Info("配置加载成功")
+	logger.Info("应用计数器", "count", GlobalConfig.App.Count)
+	logger.Info("Redis地址", "address", GlobalConfig.Redis.Address)
 }

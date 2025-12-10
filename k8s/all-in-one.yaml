@@ -1,109 +1,171 @@
-apiVersion: apps/v1
-kind: Deployment
+# Deployment资源：定义应用的部署配置
+apiVersion: apps/v1  # Kubernetes API版本
+kind: Deployment     # 资源类型：部署
 metadata:
-  name: app-deployment
+  name: app-deployment  # Deployment名称
   labels:
-    app: k8s-redis-service
+    app: k8s-redis-service  # 标签：用于资源选择
   annotations:
-    description: "Application deployment"
+    description: "Application deployment"  # 描述注解
 spec:
-  replicas: 1
+  replicas: 2  # Pod副本数量：运行2个Pod实例，提高可用性
+  # 部署策略：滚动更新配置
+  strategy:
+    type: RollingUpdate  # 滚动更新策略
+    rollingUpdate:
+      maxSurge: 1        # 更新期间最多允许超出期望副本数1个
+      maxUnavailable: 0   # 更新期间不允许不可用Pod
   selector:
     matchLabels:
-      app: k8s-redis-service
+      app: k8s-redis-service  # 选择器：匹配具有此标签的Pod
   template:
     metadata:
       labels:
-        app: k8s-redis-service
+        app: k8s-redis-service  # Pod标签
       annotations:
-        config/version: "1"  # 用于触发Pod重启的配置版本
+        config/version: "1"  # 配置版本注解：用于触发Pod重启的配置版本
     spec:
+      # 临时使用root用户运行，解决权限问题
+      # TODO: 后续优化为非root用户配置
+      securityContext:
+        runAsUser: 0  # root用户ID，临时解决权限问题
+        runAsGroup: 0  # root组ID
+        runAsNonRoot: false  # 允许以root用户运行（临时方案）
+      # 安全增强：Pod安全策略
+      hostNetwork: false  # 禁用主机网络
+      hostPID: false      # 禁用主机PID命名空间
+      hostIPC: false      # 禁用主机IPC命名空间
       containers:
-        - name: app-container
-          image: k8s-redis-service:latest
-          imagePullPolicy: Never
+        - name: app-container  # 容器名称，用于标识容器实例
+          image: k8s-redis-service:optimized  # 使用的Docker镜像名称和标签
+          imagePullPolicy: Never  # 镜像拉取策略：Never表示使用本地镜像，不拉取远程
+          # 容器安全上下文
+          securityContext:
+            readOnlyRootFilesystem: false  # 允许写入文件系统（日志需要）
+            privileged: false              # 非特权模式
+            allowPrivilegeEscalation: false  # 禁止特权升级
+            capabilities:
+              drop:
+                - ALL  # 移除所有Linux能力
           ports:
-            - containerPort: 8080
+            - containerPort: 8080  # 容器内部监听的端口，对应应用服务端口
           env:
+            # Redis密码环境变量，从Kubernetes Secret中获取
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: app-secret
-                  key: redis-password
+                  name: app-secret  # Secret资源名称
+                  key: redis-password  # Secret中的键名
+            # 安全增强：应用安全配置
+            - name: GIN_MODE
+              value: "release"  # 生产模式，禁用调试信息
+            - name: LOG_DIR  # 日志目录环境变量
+              value: "/app/logs"  # 在Kubernetes环境中使用挂载的日志目录
           volumeMounts:
+            # 配置文件挂载：将ConfigMap挂载到容器内的/app/conf目录
             - name: config-volume
               mountPath: /app/conf
+            # 日志目录挂载：将容器内的/app/logs目录挂载到本地D:\\python\\k8s\\logs目录
+            - name: logs-volume
+              mountPath: /app/logs
           resources:
+            # 资源请求：Pod启动时需要的最小资源
             requests:
-              memory: "64Mi"
-              cpu: "250m"
+              memory: "64Mi"  # 最小内存64MB
+              cpu: "250m"     # 最小CPU 0.25核
+            # 资源限制：Pod运行时的最大资源限制
             limits:
-              memory: "128Mi"
-              cpu: "500m"
+              memory: "128Mi"  # 最大内存128MB
+              cpu: "500m"      # 最大CPU 0.5核
+          # 存活探针：检查容器是否正常运行，失败则重启容器
           livenessProbe:
             httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 10
+              path: /health  # 健康检查端点路径
+              port: 8080     # 健康检查端口
+              httpHeaders:
+                - name: Custom-Health-Check
+                  value: "K8s-Liveness-Probe"
+            initialDelaySeconds: 30  # 容器启动后等待30秒开始检查
+            periodSeconds: 10        # 每10秒检查一次
+            timeoutSeconds: 3        # 超时时间3秒
+            successThreshold: 1      # 成功阈值1次
+            failureThreshold: 3      # 失败阈值3次
+          # 就绪探针：检查容器是否准备好接收流量
           readinessProbe:
             httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 5
+              path: /health  # 就绪检查端点路径
+              port: 8080     # 就绪检查端口
+              httpHeaders:
+                - name: Custom-Health-Check
+                  value: "K8s-Readiness-Probe"
+            initialDelaySeconds: 5   # 容器启动后等待5秒开始检查
+            periodSeconds: 5        # 每5秒检查一次
+            timeoutSeconds: 2        # 超时时间2秒
+            successThreshold: 1      # 成功阈值1次
+            failureThreshold: 3      # 失败阈值3次
+          # 启动探针：确保应用完全启动后再进行健康检查
+          startupProbe:
+            httpGet:
+              path: /health  # 启动检查端点路径
+              port: 8080     # 启动检查端口
+            initialDelaySeconds: 10  # 容器启动后等待10秒开始检查
+            periodSeconds: 5         # 每5秒检查一次
+            timeoutSeconds: 3        # 超时时间3秒
+            failureThreshold: 30     # 失败阈值30次（最多等待150秒启动）
       volumes:
+        # 卷定义：将ConfigMap挂载为卷供容器使用
         - name: config-volume
           configMap:
-            name: app-config
+            name: app-config  # ConfigMap资源名称
+        # 日志卷定义：将本地D:\python\k8s\logs目录挂载到容器内
+        # 在Windows环境下，Docker Desktop使用特殊的路径格式
+        - name: logs-volume
+          hostPath:
+            path: /run/desktop/mnt/host/d/python/k8s/logs  # Windows环境下Docker Desktop的正确路径格式
+            type: DirectoryOrCreate  # 如果目录不存在则创建
       restartPolicy: Always
 
 ---
-apiVersion: v1
-kind: Service
+# Service资源：定义应用的网络服务
+apiVersion: v1  # Kubernetes API版本
+kind: Service   # 资源类型：服务
 metadata:
-  name: app-service
+  name: app-service  # Service名称
   labels:
-    app: k8s-redis-service
+    app: k8s-redis-service  # 标签：用于资源选择
   annotations:
-    description: "Application service"
+    description: "Application service"  # 描述注解
 spec:
   selector:
-    app: k8s-redis-service
+    app: k8s-redis-service  # 选择器：将流量路由到具有此标签的Pod
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8080
-  type: ClusterIP
+    - protocol: TCP        # 协议类型：TCP
+      port: 80             # 服务端口：外部访问端口
+      targetPort: 8080     # 目标端口：容器内部端口
+  type: ClusterIP  # 服务类型：集群内部IP，仅集群内可访问
 
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+# Ingress资源：定义外部访问的路由规则
+apiVersion: networking.k8s.io/v1  # Kubernetes API版本
+kind: Ingress                     # 资源类型：入口
 metadata:
-  name: app-ingress
+  name: app-ingress  # Ingress名称
   labels:
-    app: k8s-redis-service
+    app: k8s-redis-service  # 标签：用于资源选择
   annotations:
-    description: "Application ingress"
-    kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    description: "Application ingress"  # 描述注解
+    kubernetes.io/ingress.class: "nginx"  # 指定使用Nginx Ingress Controller
+    nginx.ingress.kubernetes.io/rewrite-target: /$2  # URL重写规则
 spec:
-  ingressClassName: nginx
+  ingressClassName: nginx  # Ingress类名称：指定使用nginx类
   rules:
-  - host: k8s-redis.local
+  - host: k8s-redis.local  # 域名：访问的虚拟主机名
     http:
       paths:
-      - path: /user(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /user(/|$)(.*)  # 路径匹配规则：匹配/user开头的路径
+        pathType: ImplementationSpecific  # 路径类型：由Ingress Controller实现决定
         backend:
           service:
-            name: app-service
+            name: app-service  # 后端服务名称
             port:
-              number: 80
-      - path: /goods(/|$)(.*)
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: goods-service
-            port:
-              number: 80
+              number: 80       # 后端服务端口

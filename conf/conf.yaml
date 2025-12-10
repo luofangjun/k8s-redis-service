@@ -4,7 +4,7 @@ server:
 
 # 应用配置
 app:
-  count: 1045  # 应用计数器
+  count: 100  # 应用计数器
 
 # Redis配置
 redis:

@@ -5,12 +5,20 @@ import (
 
 	"k8s-redis-service/config"
 	"k8s-redis-service/database"
+	"k8s-redis-service/logger"
 	"k8s-redis-service/router"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// 初始化日志系统
+	if err := logger.InitLogger(); err != nil {
+		fmt.Printf("初始化日志系统失败: %v\n", err)
+		panic("初始化日志系统失败: " + err.Error())
+	}
+	defer logger.Info("服务器正常关闭")
+
 	// 加载配置
 	config.LoadConfig()
 
@@ -27,6 +35,8 @@ func main() {
 	router.SetupRoutes(r)
 
 	// 启动服务器
-	fmt.Printf("服务器启动在 :%d\n", config.GlobalConfig.Server.Port)
-	r.Run(fmt.Sprintf(":%d", config.GlobalConfig.Server.Port))
+	logger.Info("服务器启动", "port", config.GlobalConfig.Server.Port)
+	if err := r.Run(":" + fmt.Sprintf("%d", config.GlobalConfig.Server.Port)); err != nil {
+		logger.Error("服务器启动失败", "error", err)
+	}
 }

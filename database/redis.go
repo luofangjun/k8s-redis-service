@@ -2,10 +2,9 @@ package database
 
 import (
 	"context"
-	"fmt"
-	"log"
 
 	"k8s-redis-service/config"
+	"k8s-redis-service/logger"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -20,7 +19,8 @@ var Rdb *redis.Client
 func InitRedis() {
 	// 确保配置已加载
 	if config.GlobalConfig == nil {
-		log.Fatal("配置未加载，请先调用config.LoadConfig()")
+		logger.Error("配置未加载，请先调用config.LoadConfig()")
+		return
 	}
 
 	// 初始化Redis客户端
@@ -33,9 +33,9 @@ func InitRedis() {
 	// 测试Redis连接
 	_, err := Rdb.Ping(Ctx).Result()
 	if err != nil {
-		log.Printf("警告: Redis连接失败，请检查Redis服务是否启动且配置正确: %v", err)
-		log.Println("服务将继续运行，但Redis相关功能将不可用")
+		logger.Warn("Redis连接失败，请检查Redis服务是否启动且配置正确", "error", err)
+		logger.Info("服务将继续运行，但Redis相关功能将不可用")
 	} else {
-		fmt.Println("Redis连接成功")
+		logger.Info("Redis连接成功")
 	}
 }
